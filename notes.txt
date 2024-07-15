@@ -1,0 +1,69 @@
+DATA
+
+- The data has different resolutions and spectral bands. 
+
+Spatial Resolution
+- 4 bands at 10 m (B2, B3, B4, B8)
+- 6 bands at 20 m (B5, B6, B7, B8A, B11, B12)
+- 3 bands at 60 m (B1, B9)
+
+Band	Resolution	Central Wavelength	Description
+B1	60 m	443 nm	Ultra Blue (Coastal and Aerosol)
+B2	10 m	490 nm	Blue
+B3	10 m	560 nm	Green
+B4	10 m	665 nm	Red
+B5	20 m	705 nm	Visible and Near Infrared (VNIR)
+B6	20 m	740 nm	Visible and Near Infrared (VNIR)
+B7	20 m	783 nm	Visible and Near Infrared (VNIR)
+B8	10 m	842 nm	Visible and Near Infrared (VNIR)
+B8a	20 m	865 nm	Visible and Near Infrared (VNIR)
+B9	60 m	940 nm	Short Wave Infrared (SWIR)
+B10	60 m	1375 nm	Short Wave Infrared (SWIR)
+B11	20 m	1610 nm	Short Wave Infrared (SWIR)
+B12	20 m	2190 nm	Short Wave Infrared (SWIR)
+
+EPSG:32630
+
+Pixel Values: [0, 65535]
+
+All data is in grayscale.
+
+Different folders in training refer to specific plots, and different timeframes of photos taken.
+
+*******
+DATA SPLIT
+
+- ~2000 timed photos in training/validation
+- ~500 timed photos in holdout
+
+*******
+
+MODELING
+
+- Which bands do I want to use?
+    - 12 bands are given. 3 are typically used in most ImageNet pretrained models.
+    
+    If I choose to only use select bands:
+        - Use RGB bands of most granular 10m.
+            Band 4 (Red) 
+            Band 3 (Green) 
+            Band 2 (Blue) 
+        
+        - Create false-color image for vegetation analysis:
+            Band 8 (NIR)
+            Band 4 (Red) 
+            Band 3 (Green)
+
+        - Enhanced vegetation index:
+            Band 8 (NIR)
+            Band 4 (Red) 
+            Band 2 (Blue)
+
+    Some pre-trained models using more bands are available in torchgeo:
+        - They have already used SSL, and are available for 13 bands. 
+            Could use as a baseline, and adjust head for fine-tuning.
+
+
+- How do I take into account the temporal effect? 
+    - Validation data doesn't have time identifiers, so probably not of consequence. Accounting for time wouldn't help because we don't have that information during evaluation. 
+    - Integrating time element would be good skills to learn. 
