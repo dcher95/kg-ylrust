@@ -1,4 +1,5 @@
 import os
+import shutil
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -65,54 +66,33 @@ def count_subfolders(directory, depth=1):
         print(f"An error occurred: {e}")
         return 0
 
-def create_crop_classification_df(base_path):
-    data = {
-        "Crop": [],
-        "Plot ID": [],
-        "Date": [],
-        "Timestamp": [],
-        "Tile": [],
-        "Band": [],
-        "File Path": [],
-    }
+def create_crop_classification_df(directory):
 
-    # Traverse the directory structure
-    for crop in os.listdir(base_path):
-        crop_path = os.path.join(base_path, crop)
-        if os.path.isdir(crop_path):
-            for plot_id in os.listdir(crop_path):
-                plot_path = os.path.join(crop_path, plot_id)
-                if os.path.isdir(plot_path):
-                    for date_time_tile in os.listdir(plot_path):
-                        dt_tile_path = os.path.join(plot_path, date_time_tile)
-                        if os.path.isdir(dt_tile_path):
-                            for band_file in os.listdir(dt_tile_path):
-                                if band_file.endswith(".tif"):
-                                    # Construct the shortened file path
-                                    short_file_path = os.path.join(crop, plot_id, date_time_tile, band_file)
+    roots = []
+    for root, dirs, files in os.walk(directory):
+        # Don't care about earlier parts of hierarchy. Just right before bands.
+        if len(root.split("/")) > 8:
+            roots.append(root)
 
-                                    # Extract information from date_time_tile
-                                    date, timestamp_tile = (
-                                        date_time_tile.rsplit("_", 2)[0],
-                                        date_time_tile.rsplit("_", 2)[1] + "_" + date_time_tile.rsplit("_", 2)[2],
-                                    )
-                                    timestamp, tile = timestamp_tile.split("_T")
-                                    band = band_file.split(".")[0]
+    # Create a DataFrame
+    df = pd.DataFrame(roots, columns=["File Path"])
 
-                                    # Append to data
-                                    data["Crop"].append(crop)
-                                    data["Plot ID"].append(plot_id)
-                                    data["Date"].append(date)
-                                    data["Timestamp"].append(timestamp)
-                                    data["Tile"].append(tile)
-                                    data["Band"].append(band)
-                                    data["File Path"].append(short_file_path)
 
-    # Create DataFrame
-    df = pd.DataFrame(data)
+    # Apply the extraction function to each file path
+    df[["Crop", "Plot ID", "Date"]] = df["File Path"].apply(extract_columns)
     return df
 
-import pandas as pd
+def extract_columns(file_path):
+        parts = file_path.split("/")
+        crop_classification = parts[-3]  # 'soybean'
+        plot_id = parts[-2]  # '000919'
+        file_name = os.path.basename(file_path)  # Get the file name
+        date = file_name.split("_")[0][:8]  # '20201109' from '20201109T...'
+
+        return pd.Series(
+            [crop_classification, plot_id, date],
+            index=["Crop", "Plot ID", "Date"],
+        )
 
 def find_duplicate_plot_ids(df):
     # Check for duplicate Plot IDs across different crops
@@ -152,3 +132,39 @@ def assign_holdout_plot_ids(df, seed=42):
         df.loc[df['Plot ID'].isin(holdout_plot_ids), 'Holdout'] = True
     
     return df
+
+def move_holdout_files(df, new_base_path):
+    '''
+    Move train folders to holdout. Make sure to name new folders based on plot + timestamp as might have multiple timeframes for single plot.
+    '''
+    new_df = df.copy()
+    holdout_df = df[df["Holdout"] == True].copy()
+
+    for index, row in holdout_df.iterrows():
+
+        new_path = os.path.join(new_base_path, row["Plot ID"] + "-" + row["Date"])
+
+        shutil.copytree(
+            row["File Path"],
+            new_path,
+            dirs_exist_ok=True,
+        )
+        shutil.rmtree(row["File Path"])
+
+        # Update the DataFrame with the new path
+        new_df.at[index, "File Path"] = new_path
+
+    return new_df
+
+def remove_empty_folders(directory):
+    """
+    Recursively remove empty folders in the specified directory.
+    """
+    # Traverse the directory tree
+    for root, dirs, files in os.walk(directory, topdown=False):
+        for dir_name in dirs:
+            dir_path = os.path.join(root, dir_name)
+            # Check if the directory is empty
+            if not os.listdir(dir_path):  # True if the directory is empty
+                os.rmdir(dir_path)  # Remove the empty directory
+                print(f"Removed empty directory: {dir_path}")
