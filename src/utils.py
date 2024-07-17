@@ -2,6 +2,7 @@ import os
 import shutil
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
 import numpy as np
 
 def download_competition_data(competition_name, input_folder):
@@ -108,41 +109,57 @@ def find_duplicate_plot_ids(df):
     else:
         print("No Plot IDs found in multiple crops.")
 
-def assign_holdout_plot_ids(df, seed=42):
-    # Initialize a new column for holdout indicator
-    df['Holdout'] = False
+def stratified_partition(df, id_col, train_size=0.7, val_size=0.15, holdout_size=0.15, random_state=42):
+    if train_size + val_size + holdout_size != 1.0:
+        raise ValueError("The sum of train_size, val_size, and test_size must be 1.0")
     
-    # Get unique crops
-    crops = df['Crop'].unique()
+    # Prepare the Stratified Shuffle Split for train and remaining (validation + test)
+    stratified_split_1 = StratifiedShuffleSplit(n_splits=1, test_size=(val_size + holdout_size), random_state=random_state)
     
-    # Iterate over unique crops
-    for crop in crops:
-        crop_df = df[df['Crop'] == crop]
-        
-        # Get unique Plot IDs for the current crop
-        unique_plot_ids = crop_df['Plot ID'].unique()
-        
-        # Determine the number of Plot IDs to select for holdout (20%)
-        holdout_count = int(0.2 * len(unique_plot_ids))
-        
-        # Randomly sample Plot IDs with a seed for reproducibility
-        holdout_plot_ids = np.random.RandomState(seed).choice(unique_plot_ids, size=holdout_count, replace=False)
-        
-        # Update the Holdout column for the selected Plot IDs
-        df.loc[df['Plot ID'].isin(holdout_plot_ids), 'Holdout'] = True
+    # Prepare the Stratified Shuffle Split for validation and test
+    stratified_split_2 = StratifiedShuffleSplit(n_splits=1, test_size=(holdout_size / (val_size + holdout_size)), random_state=random_state)
     
-    return df
+    # Get the unique plot IDs and their associated labels
+    unique_plot_ids = df[id_col].unique()
+    plot_id_labels = df.groupby(id_col).size().values
+    
+    # First split: Train and (Validation + Test)
+    train_index, remaining_index = next(stratified_split_1.split(unique_plot_ids, plot_id_labels))
+    train_plot_ids = unique_plot_ids[train_index]
+    remaining_plot_ids = unique_plot_ids[remaining_index]
+    
+    # Subset the original DataFrame into Train and Remaining DataFrames
+    train_df = df[df[id_col].isin(train_plot_ids)]
+    remaining_df = df[df[id_col].isin(remaining_plot_ids)]
+    
+    # Get the labels for the remaining plot IDs
+    remaining_plot_id_labels = remaining_df.groupby(id_col).size().values
+    
+    # Second split: Validation and Test
+    val_index, test_index = next(stratified_split_2.split(remaining_plot_ids, remaining_plot_id_labels))
+    val_plot_ids = remaining_plot_ids[val_index]
+    test_plot_ids = remaining_plot_ids[test_index]
+    
+    # Subset the Remaining DataFrame into Validation and Test DataFrames
+    val_df = remaining_df[remaining_df[id_col].isin(val_plot_ids)]
+    test_df = remaining_df[remaining_df[id_col].isin(test_plot_ids)]
+    
+    return train_df, val_df, test_df
 
-def move_holdout_files(df, new_base_path):
+def move_files(df, new_base_path = None, split = 'Holdout'):
     '''
     Move train folders to holdout. Make sure to name new folders based on plot + timestamp as might have multiple timeframes for single plot.
     '''
-    new_df = df.copy()
-    holdout_df = df[df["Holdout"] == True].copy()
+    move_df = df.copy()
 
-    for index, row in holdout_df.iterrows():
+    for index, row in move_df.iterrows():
 
-        new_path = os.path.join(new_base_path, row["Plot ID"] + "-" + row["Date"])
+        
+        if split == 'Holdout':
+            new_path = os.path.join(new_base_path, row["Plot ID"] + "-" + row["Date"])
+
+        if split == 'Validation':
+            new_path = row['File Path'].replace("train", "validation")
 
         shutil.copytree(
             row["File Path"],
@@ -152,9 +169,9 @@ def move_holdout_files(df, new_base_path):
         shutil.rmtree(row["File Path"])
 
         # Update the DataFrame with the new path
-        new_df.at[index, "File Path"] = new_path
+        move_df.at[index, "File Path"] = new_path
 
-    return new_df
+    return move_df
 
 def remove_empty_folders(directory):
     """
