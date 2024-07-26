@@ -1,0 +1,14 @@
+Noisy labels?
+- Very hard to differentiate the different crops looking at RGB images.
+- Can't really tell the difference. Any modeling is better that I could do.
+- Are they truly divided that well? I feel like these are generally close to one another, and fields may mix, therefore some label smoothing would probably be effective.
+
+Outliers?
+- Cloud cover pictures basically make it impossible. 
+- Hyperspectral bands is probably necessary to pass through the cloud cover??
+
+Patterns
+- Texture seems to be very important. Therefore, high-levels of detail with localized architectures that don't do average pooling are probably better? Experiment to verify??
+    - Transformer would probably be worse?
+- General shapes of the field may be important? Some may be more uniform than others.
+- Spatial positioning is not important. it's all geometric objects - where they are doesn't particularly matter.

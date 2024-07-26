@@ -25,7 +25,7 @@ Following questions were attempted to be answered:
 
 ### Experiment 1: Does using false-color images specific for vegetation analysis outperform typical RGB based models?
 
-Compare pre-trained ImageNet models on fine-tuned images using different bands.
+- Compare pre-trained ImageNet models on fine-tuned images using different bands.
  A) Typical RGB structure: [Band 4 (Red), Band 3 (Green), Band 2 (Blue)]
  B) Enhanced Vegetation Index: [Band 4 (Red), Band 2 (Blue), Band 8 (NIR)]
  <!-- C) False color Image for vegetation analysis: [Band 4 (Red), Band 3 (Green), Band 8 (NIR)] ?? -->
