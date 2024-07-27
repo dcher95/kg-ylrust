@@ -15,7 +15,8 @@ class CropDataset(Dataset):
         root_dir (str): Root directory containing crop image folders.
         transform (Optional[transforms.Compose]): Transformations to apply to the images.
         samples (List[Dict[str, Dict[str, str]]]): List of dictionaries containing paths to RGB band files and labels.
-        bands (str): identifier (e.g. 'rgb', 'evi')
+        bands (str): Identifier (e.g. 'rgb', 'evi')
+        label_mapping (Dict[str, int]): Mapping from crop types to integer labels.
     """
 
     def __init__(self, root_dir: str, bands: str, transform: Optional[transforms.Compose] = None) -> None:
@@ -25,12 +26,23 @@ class CropDataset(Dataset):
         Args:
             root_dir (str): Root directory containing crop image folders.
             transform (Optional[transforms.Compose]): Transformations to apply to the images.
-            bands (str): identifier (e.g. 'rgb', 'evi')
+            bands (str): Identifier (e.g. 'rgb', 'evi')
         """
         self.root_dir = root_dir
         self.transform = transform
         self.bands = bands
+        self.label_mapping = self._create_label_mapping()
         self.samples = self._load_samples()
+
+    def _create_label_mapping(self) -> Dict[str, int]:
+        """
+        Creates a mapping from crop types to integer labels.
+
+        Returns:
+            Dict[str, int]: Dictionary mapping crop types to integer labels.
+        """
+        crop_types = sorted(os.listdir(self.root_dir))  # Ensure consistent ordering
+        return {crop_type: idx for idx, crop_type in enumerate(crop_types)}
 
     def _load_samples(self):
         """
@@ -40,8 +52,7 @@ class CropDataset(Dataset):
             List[Dict[str, Dict[str, str]]]: List of dictionaries containing paths to RGB band files and labels.
         """
         samples = []
-        crop_types = os.listdir(self.root_dir)
-        for crop_type in crop_types:
+        for crop_type in self.label_mapping.keys():
             crop_dir = os.path.join(self.root_dir, crop_type)
             for sample_dir in glob.glob(os.path.join(crop_dir, '*', '*')):
                 if self.bands == 'rgb':
@@ -51,7 +62,7 @@ class CropDataset(Dataset):
                             'B3': os.path.join(sample_dir, 'B3.tif'),
                             'B2': os.path.join(sample_dir, 'B2.tif')
                         },
-                        'label': crop_type
+                        'label': crop_type  # Store string label initially
                     }
                 samples.append(sample)
         return samples
@@ -65,7 +76,7 @@ class CropDataset(Dataset):
         """
         return len(self.samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Tuple[torch.Tensor, int]:
         """
         Retrieves an image and its label for a given index.
 
@@ -73,7 +84,7 @@ class CropDataset(Dataset):
             idx (int): Index of the sample to retrieve.
 
         Returns:
-            Tuple[torch.Tensor, str]: Tuple containing the RGB image tensor and its label.
+            Tuple[torch.Tensor, int]: Tuple containing the RGB image tensor and its integer label.
         """
         sample = self.samples[idx]
         if self.bands == 'rgb':
@@ -81,10 +92,9 @@ class CropDataset(Dataset):
                 image = self._load_rgb_image(sample['paths'])
             except Exception as e:
                 print(f"Error loading image {sample['paths']}: {e}")
-                # Handle the error or return a default value
                 image = torch.zeros((3, 256, 256))  # Example default value
 
-        label = sample['label']
+        label = self.label_mapping[sample['label']]  # Convert string label to integer index
         
         if self.transform:
             image = self.transform(image)
